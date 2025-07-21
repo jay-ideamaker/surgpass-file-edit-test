@@ -13,32 +13,27 @@ from .models import Question
 from .serializers import QuestionSerializer
 
 # This is our main conversion logic
-def process_docx_file(docx_file_obj, filename):
-    # Create a unique directory for this file's media
+def process_docx_file(docx_file_path, original_filename):
+    # The file is already saved, so we don't need to write it again.
+    # We just need a unique directory for the output media.
     unique_id = uuid4().hex
-    temp_dir = os.path.join(settings.MEDIA_ROOT, 'temp', unique_id)
-    os.makedirs(temp_dir, exist_ok=True)
-
-    # Save the uploaded docx temporarily
-    temp_docx_path = os.path.join(temp_dir, filename)
-    with open(temp_docx_path, 'wb+') as f:
-        for chunk in docx_file_obj.chunks():
-            f.write(chunk)
+    # We can use the directory of the docx file as a base for temp output
+    temp_output_dir = os.path.join(os.path.dirname(docx_file_path), 'temp_media', unique_id)
+    os.makedirs(temp_output_dir, exist_ok=True)
 
     # 1. Convert DOCX to HTML with Pandoc
-    media_dir = os.path.join(temp_dir, 'media')
+    media_dir = os.path.join(temp_output_dir, 'media')
     os.makedirs(media_dir, exist_ok=True)
-    html_output_path = os.path.join(temp_dir, 'output.html')
+    html_output_path = os.path.join(temp_output_dir, 'output.html')
     
-    # This command preserves table styles by adding the +styles extension
     subprocess.run([
         'pandoc',
         '-f', 'docx',
-        '-t', 'html+styles', # Use html+styles to keep inline styles
-        temp_docx_path,
+        '-t', 'html',
+        docx_file_path, # Use the provided path
         '-o', html_output_path,
         f'--extract-media={media_dir}'
-    ], check=True)
+    ], capture_output=True, text=True, check=True)
 
     # 2. Convert DOCX to PDF with LibreOffice for viewing
     pdf_output_dir = os.path.join(settings.MEDIA_ROOT, 'pdf')
@@ -48,36 +43,35 @@ def process_docx_file(docx_file_obj, filename):
         '--headless',
         '--convert-to', 'pdf',
         '--outdir', pdf_output_dir,
-        temp_docx_path
+        docx_file_path # Use the provided path
     ], check=True)
     
-    pdf_filename = os.path.splitext(filename)[0] + '.pdf'
+    pdf_filename = os.path.splitext(original_filename)[0] + '.pdf'
     pdf_path = os.path.join(pdf_output_dir, pdf_filename)
 
-
-    # 3. Process HTML to update image paths
+    # 3. Process HTML (this part remains the same)
     with open(html_output_path, 'r', encoding='utf-8') as f:
         html_content = f.read()
 
     soup = BeautifulSoup(html_content, 'html.parser')
     images = soup.find_all('img')
     
-    # Create a permanent media folder for this question
     permanent_media_dir = os.path.join(settings.MEDIA_ROOT, 'images', unique_id)
     os.makedirs(permanent_media_dir, exist_ok=True)
 
+    api_base_url = "https://surgpass-api.logicadev.top"
+
     for img in images:
         old_src = img['src']
-        # old_src is like 'media/image1.png'
         old_image_path = os.path.join(media_dir, old_src)
         new_image_name = os.path.basename(old_image_path)
         
-        # Move image to permanent location
         permanent_image_path = os.path.join(permanent_media_dir, new_image_name)
         os.rename(old_image_path, permanent_image_path)
 
-        # Update src to a public URL
-        img['src'] = os.path.join(settings.MEDIA_URL, 'images', unique_id, new_image_name)
+        # --- MODIFIED: Build the full, absolute URL ---
+        relative_url = os.path.join(settings.MEDIA_URL, 'images', unique_id, new_image_name)
+        img['src'] = api_base_url + relative_url
 
     return str(soup), pdf_path
 
@@ -85,7 +79,7 @@ def process_docx_file(docx_file_obj, filename):
 class QuestionListCreateView(APIView):
     def get(self, request):
         questions = Question.objects.all().order_by('created_at')
-        serializer = QuestionSerializer(questions, many=True)
+        serializer = QuestionSerializer(questions, many=True, context={'request': request})
         return Response(serializer.data)
 
     def post(self, request):
@@ -97,21 +91,27 @@ class QuestionListCreateView(APIView):
             )
 
         try:
-            html_content, pdf_path = process_docx_file(file_obj, file_obj.name)
-            
-            # Save the original docx file
-            docx_save_path = os.path.join('docx', f"{uuid4().hex}_{file_obj.name}")
-            with open(os.path.join(settings.MEDIA_ROOT, docx_save_path), 'wb+') as f:
-                for chunk in file_obj.chunks():
-                    f.write(chunk)
+            # 1. Define the permanent path and save the file immediately.
+            docx_filename = f"{uuid4().hex}_{file_obj.name}"
+            docx_dir = os.path.join(settings.MEDIA_ROOT, 'docx')
+            os.makedirs(docx_dir, exist_ok=True)
+            permanent_docx_path = os.path.join(docx_dir, docx_filename)
 
+            with open(permanent_docx_path, 'wb+') as destination:
+                for chunk in file_obj.chunks():
+                    destination.write(chunk)
+
+            # 2. Pass the PATH to the processing function, not the file object.
+            html_content, pdf_path = process_docx_file(permanent_docx_path, file_obj.name)
+            
+            # 3. Create the Question object with the final paths.
             question = Question.objects.create(
                 original_filename=file_obj.name,
                 html_content=html_content,
-                docx_file=docx_save_path,
+                docx_file=os.path.join('docx', docx_filename), # Relative path for the model
                 pdf_file=pdf_path.replace(settings.MEDIA_ROOT + '/', '')
             )
-            serializer = QuestionSerializer(question)
+            serializer = QuestionSerializer(question, context={'request': request})
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response(
@@ -134,7 +134,7 @@ class QuestionDetailView(APIView):
             question = Question.objects.get(pk=pk)
             question.html_content = request.data.get('html_content', question.html_content)
             question.save()
-            serializer = QuestionSerializer(question)
+            serializer = QuestionSerializer(question, context={'request': request})
             return Response(serializer.data)
         except Question.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
