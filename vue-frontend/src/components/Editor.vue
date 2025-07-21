@@ -96,6 +96,32 @@
           />
         </svg>
       </button>
+
+      <!-- NEW SUPERSCRIPT BUTTON -->
+      <button
+        @click="editor.chain().focus().toggleSuperscript().run()"
+        :class="{ 'is-active': editor.isActive('superscript') }"
+        class="toolbar-button"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path
+            d="M20.41,5.59L19,7L15.5,3.5L12,7L10.59,5.59L15.5,0.68L20.41,5.59M10,11A4,4 0 0,1 6,15A4,4 0 0,1 2,11V4H4V11A2,2 0 0,0 6,13A2,2 0 0,0 8,11V4H10V11Z"
+          />
+        </svg>
+      </button>
+      <!-- NEW SUBSCRIPT BUTTON -->
+      <button
+        @click="editor.chain().focus().toggleSubscript().run()"
+        :class="{ 'is-active': editor.isActive('subscript') }"
+        class="toolbar-button"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path
+            d="M20.41,18.41L19,17L15.5,20.5L12,17L10.59,18.41L15.5,23.32L20.41,18.41M10,11A4,4 0 0,1 6,15A4,4 0 0,1 2,11V4H4V11A2,2 0 0,0 6,13A2,2 0 0,0 8,11V4H10V11Z"
+          />
+        </svg>
+      </button>
+
       <div class="toolbar-separator"></div>
       <!-- Nodes -->
       <button
@@ -141,6 +167,8 @@
 import { useEditor, EditorContent } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
+import Superscript from "@tiptap/extension-superscript"; // Extension for superscript
+import Subscript from "@tiptap/extension-subscript"; // Extension for subscript
 import Image from "@tiptap/extension-image";
 import { watch, onBeforeUnmount } from "vue";
 import { useQuestionStore } from "../stores/questions";
@@ -156,6 +184,8 @@ const editor = useEditor({
   extensions: [
     StarterKit,
     Underline,
+    Superscript, // Make sure the extension is registered
+    Subscript, // Make sure the extension is registered
     Image.configure({ inline: true }),
     ResizeImage,
   ],
