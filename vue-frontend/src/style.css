@@ -1,16 +1,17 @@
 /* Define our color palette using CSS variables */
 :root {
   /* Light Mode (Default) */
-  --color-background: #f8f9fa;
-  --color-surface: #ffffff;
+  --color-background: #f8f9fa; /* Page background */
+  --color-surface: #ffffff; /* Editor/Result background */
   --color-text: #212529;
   --color-text-muted: #6c757d;
   --color-border: #dee2e6;
-  --color-header-bg: #e9ecef;
+  --color-header-bg: #f1f3f5;
   --color-header-text: #495057;
+  --color-accent: #339af0; /* Blue for active states */
 
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
+  line-height: 1.6;
   font-weight: 400;
   color-scheme: light dark;
 }
@@ -18,13 +19,14 @@
 @media (prefers-color-scheme: dark) {
   :root {
     /* Dark Mode Overrides */
-    --color-background: #121212;
-    --color-surface: #1e1e1e;
-    --color-text: #e0e0e0;
-    --color-text-muted: #888888;
-    --color-border: #333333;
-    --color-header-bg: #2a2a2a;
-    --color-header-text: #cccccc;
+    --color-background: #1a1b1e;
+    --color-surface: #25262b;
+    --color-text: #c1c2c5;
+    --color-text-muted: #868e96;
+    --color-border: #373a40;
+    --color-header-bg: #2c2e33;
+    --color-header-text: #adb5bd;
+    --color-accent: #339af0;
   }
 }
 
